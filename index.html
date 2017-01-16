@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Test App</title>
+  <link rel="stylesheet" href="/static/bootstrap/dist/css/bootstrap.css">
+  <style>
+  form {
+    display: -webkit-flex;
+    display: -moz-flex;
+    display: -ms-flex;
+    display: -o-flex;
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  input {
+    width: 100%;
+    margin-right: 30px;
+  }
+  </style>
+</head>
+
+<body>
+  <div class="container" id="vueapp">
+    <ul id="messages">
+      <li v-for="msg in messages">
+        {{msg.user}} ({{msg.timestamp}}) : {{msg.message}}
+      </li>
+    </ul>
+    <small class='hidden'>{{isTyping}}</small>
+    <form action="">
+      <input v-model='newMsg' autocomplete="off" />
+      <button class="btn btn-success" v-bind:disabled="!validateUser" v-on:click.prevent='sendMessage'>Send</button>
+    </form>
+    <small v-for="user in typing">{{user}} is typing. </small>
+    <div id="userModal" data-backdrop="static" data-keyboard="false" class="modal fade" tabindex="-1" role="dialog">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title">Please provide a user name: </h4>
+          </div>
+          <div class="modal-body">
+            <input type="text" v-model="user">
+          </div>
+          <div class="modal-footer">
+            <button type="button" v-on:click="closeUserModal" class="btn btn-success" v-bind:disabled="!validateUser" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/static/jquery/dist/jquery.js"></script>
+  <script src="/static/bootstrap/dist/js/bootstrap.js"></script>
+  <script src="/static/vue/dist/vue.js"></script>
+  <script>
+  var socket = io();
+  var vm = new Vue({
+    el: '#vueapp',
+    data: {
+      user: "",
+      messages: [],
+      newMsg: "",
+      typing: []
+    },
+    mounted: function() {
+      this.loadHistory();
+      this.onChatMessage();
+      this.onIsTyping();
+      this.openUserDialog();
+    },
+    computed: {
+      validateUser: function() {
+        if (this.user != "")
+          return true;
+        else false;
+      },
+      isTyping: function() {
+        if (this.newMsg && this.user) {
+          socket.emit('is typing', {
+            "user": this.user,
+            "on": true
+          });
+          return true;
+        } else {
+          socket.emit('is typing', {
+            "user": this.user,
+            "on": false
+          });
+          return false;
+        }
+      }
+    },
+    methods: {
+      openUserDialog: function() {
+        $('#userModal').modal('show');
+      },
+      closeUserModal: function() {
+        $('#userModal').modal('hide');
+      },
+      loadHistory: function(msgs) {
+        var $vue = this;
+        socket.on('load history', function(msgs) {
+          $vue.messages = msgs;
+        });
+      },
+      onChatMessage: function() {
+        var $vue = this;
+        socket.on('chat message', function(msg) {
+          $vue.messages.push(msg);
+        });
+      },
+      onIsTyping: function() {
+        var $vue = this;
+        socket.on('is typing', function(usersTyping) {
+          var index = usersTyping.indexOf($vue.user);
+
+          if (index != -1) {
+            usersTyping.splice(index, 1);
+          }
+
+          $vue.typing = usersTyping;
+        });
+      },
+      sendMessage: function() {
+        if (this.user) {
+          var $vue = this;
+          socket.emit('chat message', {
+            user: this.user,
+            message: this.newMsg,
+            timestamp: this.convertDate(Date.now())
+          });
+          this.newMsg = "";
+        }
+      },
+      convertDate: function(dateint) {
+        var date = new Date(dateint);
+        return date;
+      }
+    }
+  });
+  </script>
+</body>
+
+</html>
